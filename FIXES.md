@@ -1,4 +1,4 @@
-# Bug Fixes — Version 2
+# Bug Fixes — Version 2.1
 
 ## Issue
 Vulnerabilities weren't rendering in sidebar and buttons weren't responding on GitHub Pages.
@@ -9,6 +9,21 @@ Vulnerabilities weren't rendering in sidebar and buttons weren't responding on G
 3. **Event delegation:** Missing proper event listener setup after DOM rendering
 
 ## Solution Applied
+
+### Fix 0: runDemo Function (Critical)
+**Issue:** Code tried to call non-existent `renderA01`, `renderA02`, etc. functions
+
+**Old Code:**
+```javascript
+const renderers = {a01:renderA01,a02:renderA02,...};
+renderers[currentId]?.(currentData);  // ❌ renderA01 doesn't exist!
+```
+
+**Fix:**
+- Removed calls to non-existent `renderA*` functions
+- Each `runA*()` function already handles its own rendering via `setPanels()`
+- Added `renderPrompts(currentData.prompts)` call to show Claude prompts
+- Result: ✅ Run Demo button now works
 
 ### Fix 1: Sidebar Navigation (renderSidebar)
 **Before:** Used inline `onclick="selectItem('${item.id}')"` which caused quote escaping issues

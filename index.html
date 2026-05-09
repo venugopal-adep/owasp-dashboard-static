@@ -275,8 +275,6 @@ function runDemo() {
     const demoRunners = {a01:runA01,a02:runA02,a03:runA03,a04:runA04,a05:runA05,a06:runA06,a07:runA07,a08:runA08,a09:runA09,a10:runA10};
     currentData = demoRunners[currentId]?.();
     if (!currentData) throw new Error('Demo not found');
-    const renderers = {a01:renderA01,a02:renderA02,a03:renderA03,a04:renderA04,a05:renderA05,a06:renderA06,a07:renderA07,a08:renderA08,a09:renderA09,a10:renderA10};
-    renderers[currentId]?.(currentData);
     renderPrompts(currentData.prompts);
   } catch(e) { document.getElementById('tab-panels').innerHTML = `<div class="p-4 text-red-400 text-sm">${esc(e.message)}</div>`; }
   finally { btn.disabled=false; btn.innerHTML='↺ Run Again'; }
