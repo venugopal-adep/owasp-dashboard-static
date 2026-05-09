@@ -165,9 +165,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── SIDEBAR ────────────────────────────────────────────────────────────────────
 function renderSidebar() {
-  const html = OWASP.map((item, idx) => `
-    <div class="nav-item p-2.5 ${idx===0?'active':''}" onclick="selectItem('${item.id}')" id="nav-${item.id}"
-         style="${idx===0?'border-color:'+item.color+'44;':''}">
+  const html = OWASP.map((item, idx) => {
+    const borderStyle = idx===0?`border-color:${item.color}44;`:'';
+    return `
+    <div class="nav-item p-2.5 ${idx===0?'active':''}" data-id="${item.id}" id="nav-${item.id}"
+         style="${borderStyle}">
       <div class="flex items-center gap-2.5">
         <span class="text-base">${item.icon}</span>
         <div class="min-w-0 flex-1">
@@ -179,8 +181,16 @@ function renderSidebar() {
       <div class="mt-1.5 w-full h-1 rounded-full bg-slate-200">
         <div class="h-1 rounded-full bar-fill" style="width:${item.risk*10}%;background:${item.color};opacity:.7;"></div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('nav-items').innerHTML = html;
+
+  // Add click handlers after rendering
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.addEventListener('click', () => {
+      selectItem(el.getAttribute('data-id'));
+    });
+  });
 }
 
 // ── SELECT ────────────────────────────────────────────────────────────────────
@@ -301,7 +311,7 @@ function renderPrompts(prompts) {
           <div class="rounded-lg p-4" style="background:var(--card-muted);border:1px solid var(--border);">
             <div class="flex justify-between items-start gap-2 mb-2">
               <span class="text-xs font-semibold text-slate-400">Prompt ${i+1}: ${esc(p.label)}</span>
-              <button class="copy-btn" id="cp${i}" onclick="copy(${i},'${esc(p.text.replace(/'/g,"__SQ__"))}')">Copy</button>
+              <button class="copy-btn" id="cp${i}" data-prompt-index="${i}">Copy</button>
             </div>
             <pre class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">${esc(p.text)}</pre>
           </div>`).join('')}
@@ -309,9 +319,16 @@ function renderPrompts(prompts) {
     </div>`;
   const panel = document.getElementById('prompts-panel');
   panel.innerHTML = html; panel.style.display = 'block';
+
+  // Add copy handlers
+  prompts.forEach((p, i) => {
+    const btn = document.getElementById(`cp${i}`);
+    if (btn) {
+      btn.addEventListener('click', () => copy(i, p.text));
+    }
+  });
 }
-async function copy(i, raw) {
-  const text = raw.replace(/__SQ__/g,"'");
+async function copy(i, text) {
   await navigator.clipboard.writeText(text).catch(()=>{});
   const btn = document.getElementById('cp' + i);
   btn.textContent = '✓'; btn.classList.add('ok');
